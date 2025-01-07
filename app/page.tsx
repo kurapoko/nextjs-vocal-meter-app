@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from "react";
+import { Chart, registerables } from "chart.js";
+
+// Chart.jsのコンポーネントを登録
+Chart.register(...registerables);
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -8,6 +12,7 @@ export default function Home() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataPoints = useRef<number[]>([]);
   const [decibels, setDecibels] = useState(0);
+  const chartRef = useRef<Chart | null>(null);
 
   useEffect(() => {
     const initAudio = async () => {
@@ -46,6 +51,33 @@ export default function Home() {
       const height = canvas.height;
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
+      if (!chartRef.current) {
+        chartRef.current = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: Array.from({ length: width }, (_, i) => i),
+            datasets: [{
+              label: '音量波線グラフ',
+              data: dataPoints.current,
+              borderColor: 'blue',
+              borderWidth: 2,
+              fill: false,
+            }]
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: height,
+                ticks: {
+                  callback: (value) => `${value} dB`
+                }
+              }
+            }
+          }
+        });
+      }
+
       const draw = () => {
         analyser.getByteTimeDomainData(dataArray);
 
@@ -64,16 +96,11 @@ export default function Home() {
           dataPoints.current.shift();
         }
 
-        // Canvas 描画
-        ctx.clearRect(0, 0, width, height);
-        ctx.beginPath();
-        ctx.moveTo(0, dataPoints.current[0]);
-        for (let i = 1; i < dataPoints.current.length; i++) {
-          ctx.lineTo(i, dataPoints.current[i]);
+        // Chart.jsでグラフを更新
+        if (chartRef.current) {
+          chartRef.current.data.datasets[0].data = dataPoints.current;
+          chartRef.current.update();
         }
-        ctx.strokeStyle = "blue";
-        ctx.lineWidth = 2;
-        ctx.stroke();
 
         requestAnimationFrame(draw);
       };
@@ -87,6 +114,9 @@ export default function Home() {
       // クリーンアップ
       if (audioContextRef.current) {
         audioContextRef.current.close();
+      }
+      if (chartRef.current) {
+        chartRef.current.destroy();
       }
     };
   }, []);
